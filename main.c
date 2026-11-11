@@ -10,7 +10,7 @@ int built_in_commands(char** args , char** env , char* initial_directory)
     // Check if the command is a built-in command and execute it accordingly.
     if (strcmp(args[0], "cd") == 0)
     {
-        // retuen command_cd(args , initial_directory);
+        return command_cd(args , initial_directory);
     } 
     else if (strcmp(args[0], "help") == 0)
     {
@@ -18,11 +18,11 @@ int built_in_commands(char** args , char** env , char* initial_directory)
     } 
     else if (strcmp(args[0], "env") == 0)
     {
-        // return command_env(env);
+        return command_env(env);
     } 
     else if (strcmp(args[0], "setenv") == 0)
     {
-        // return command_setenv(args , env);
+        return command_setenv(args , env);
     } 
     else if (strcmp(args[0], "unsetenv") == 0)
     {
@@ -30,7 +30,7 @@ int built_in_commands(char** args , char** env , char* initial_directory)
     } 
     else if (strcmp(args[0], "which") == 0)
     {
-        // return command_which(args , env);
+        return command_which(args , env);
     } 
     else if (strcmp(args[0], "exit") == 0 || strcmp(args[0], "quit") == 0)
     {
@@ -38,7 +38,8 @@ int built_in_commands(char** args , char** env , char* initial_directory)
     } 
     else
     {
-        return 1; // Not a built-in command.
+        // Not a built-in command.
+        return 1; 
     }
     
     return 0;

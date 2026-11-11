@@ -357,3 +357,154 @@ We have "int command_env(char** env)" , Here "env" is an array of pointers to st
 So:
 {"env[0]-->"HOME=/home/user""}
 {"env[1]-->"PATH=/usr/bin:bin""} etc
+
+### 5.5. char* find_command_in_path(const char* command, char** env); :
+This is a forward declaration of the function cuz we will need it in "command_which()"
+The function returns a pointer to a character, usually the beginning of a string.
+Why return char* instead of int ??
+Because we do,'t just to know whether the command exists or not , we want to retrieve its complete path.
+This function for example might receive " command = 'gcc' " and eventually return a dynamically allocated string "/usr/bin/gcc" or it returns "NULL" if it cannot find the command
+
+### 5.6. command_which() :
+The general idea is to search each directory until the command is found.
+
+#### 5.6.1 const char* built_in_commands[] = ... :
+This is an array of pointers to constant characters , we do "const char* " So each element points to a string  , "const" means you shouldn't modify the characters through these pointers; For example "built_in_commands[0][0] ='c' " this would be invalid , We only need to read and compare these strings , so making them "const" is appropriate .
+
+#### 5.6.2 char* full_path = find_command_in_path(args[1], env);
+If the loop doesn't find a built-in command, execution reaches this line.
+For example we try "which gcc" here gcc isn't in my built-in list so my shell will calls "find_command_in_path("gcc", env);" and The returned value is stored in : "char* full_path;" maybe It might point to : "/usr/bin/gcc" Or it might be NULL if the command wasn't found.
+Then we move to the place if the command is found
+
+### 5.7. find_command_in_path() :
+This the core of my implementation of "which".
+Its JOB is : Finding the "PATH" environment variable , extract its value , separate the directories and then construct possible path for the requested command then checkin if that path is executable and finally returns the path if found.
+
+#### 5.7.1 Declaring the variables :
+- "path_env" ==> Points to the original PATH value inside the environment array.
+- "path_copy" ==> Holds a separate, modifiable copy of PATH.
+
+Why do we need both "path_env" and "path_copy" ?
+Because you'll use a tokenization function to split PATH.
+Many tokenization functions modify the string they're processing. You generally don't want to modify the original environment string.
+
+- "token" ==> Points to the current directory extracted from PATH.
+- "full_path" ==> A local character array used to construct a candidate executable path.
+
+#### 5.7.1 Finding PATH inside the environment :
+Your environment is an array of strings, for example: 
+"env[0] = HOME=/home/user
+env[1] = USER=user
+env[2] = PATH=/usr/bin:/bin" You don't necessarily know which index contains PATH.
+
+The "strncmp()" This compares only the first five characters of the strings. ( I used "strncmp" not "strcmp" there is a difference)
+
+#### 5.7.2 if PATH doesn't :
+"if (path_env == NULL) return NULL;"
+If the loop finishes without finding "PATH", "path_env" remains NULL. The function returns NULL to indicate that it couldn't perform the search. The caller,"command_which()", will then report that the command wasn't found.
+
+#### 5.7.3 Duplicating PATH :
+This is an important memory-management concept.
+"strdup()" it allocates enough memory for a copy of a string , copies the string , and returns a pointer to the copy.
+
+Why do we need a copy ?
+Because of the next function: "strtok()" will likely modify the string by replacing delimiters with null terminators. We don't want to modify the original environment.
+
+#### 5.7.4 Splitting PATH into directories :
+Our "PATH" contains multiple directories separated by colons.
+for example : "/usr/local/bin:/usr/bin:/bin" , The colon ":" separates the directory names, and we want to obtain these individual strings : "/usr/local/bin" "/usr/local/bin" "/bin"
+
+#### 5.7.5 Constructing the complete path :
+- Inside the loop: "size_t len = strlen(token);" I calculate the length of the current directory .
+Why do we need its length ?
+Because I want to check whether the directory already ends with "/".
+
+- see this code :[  "if (token[len - 1] != '/') {
+    snprintf(full_path, sizeof(full_path), "%s%s%s",
+             token, "/", command);
+} else {
+    snprintf(full_path, sizeof(full_path), "%s%s",
+             token, command);
+}"  ]
+Suppose "token = "/usr/bin" ;" and "command = "gcc";" The directory doesn't end with "/"".
+So the line "snprintf(full_path, sizeof(full_path), "%s%s%s", token, "/", command);" will constructs : "/usr/bin/gcc"
+
+- There is a question what's "sprintf()" and "snprintf()" ?
+They are similar to "printf()", but instead of displaying the formatted result in the terminal, they store it inside a character array (string). The only difference between those two is :  "snprintf()" lets you specify the maximum size of the destination buffer.
+
+#### 5.7.6 Checking whether the executable exists and can be executed :
+- Here , This is where my shell asks the operating system about the candidate path .
+The "access()" is a POSIX function declared in <unistd.h> its general form is : "int access(const char *pathname, int mode);" It checks whether the calling process has the requested access to a file. The argument "X_OK" means that you're checking execute permission.If the check succeeds, it returns 0 .
+
+- Why do we use X_OK ?
+Because "which" is searching for executable commands, not just any file.
+
+- Why free "path_copy" before returning ?
+Remember that I created "path_copy" with "strdup()". no longer need it once I have found the command.
+
+- Why return "strdup(full_path)" ?
+It is stored as an automatic local variable. Its lifetime ends when the function returns.
+Therefore, I must not return a pointer directly to that local array.
+This would be wrong: "return full_path;"
+Instead, I make a dynamically allocated copy: "return my_strdup(full_path);"
+That returned string remains valid after the function returns, until the caller frees it.
+That's why "command_which()" later does: "free(full_path);"
+
+### 5.8. count_env_vars() :
+- This is a helper function , it is simple, but it's used by both "setenv" and "unsetenv". I need it cuz i nned to know how many actual environment variables exist before allocating a new array.
+
+### 5.9. Understanding command_setenv() :
+- Its purpose is to add an environment variable in two forms (VARIABLE=VALUE) or (VARIABLE value)
+
+#### 5.9.1 Counting the current environment variables :
+This calculates the number of existing variables.
+I'll use this number to calculate how much memory to allocate.
+
+#### 5.9.2. Allocating the new environment array :
+- "char** new_env = malloc((env_count + 2) * sizeof(char*));"
+
+- Let's examine this carefully.
+Why "char**" ? Because "new_env" is an array of pointers to strings.
+Why "env_count + 2" ? Cuz I want to keep all existing envs , add a new one and at the end add a "NULL" pointer
+
+- "sizeof(char*)" give us the size of 1 pointer
+The allocation reserves enough memory for five pointers, not five complete strings.
+
+!! Important distinction: malloc() here allocates the array of pointers. The strings themselves are allocated separately later.
+
+#### 5.9.3. Copying the existing environment variables :
+- Why copy the existing variables ?
+Because I am building a new environment array that includes the old variables plus the new one.
+I don't want to lose the existing variables when adding one.
+
+- Why check strdup() ?
+Memory allocation can fail.
+If copying one environment variable fails, the function must clean up the memory it already allocated.
+Let's say it successfully copies three variables, but allocation for the fourth fails. Then it frees the first three copied strings .
+And then frees the array itself.
+
+- Why does it not free env[j] ?
+Because those strings belong to the original environment, not to the copies it just allocated.
+
+#### 5.9.4. Supporting two input formats :
+The function supports two formats.
+
+- Format A: setenv VAR=value : 
+User enters: setenv COLOR=blue
+The parser produces: "args[0] = "setenv";" "args[1] = "COLOR=blue";"
+"args[2] = NULL;" Therefore  "args[2] == NULL" is True so the code  duplicates the complete string "COLOR=blue"
+
+- Format B: setenv VAR value :
+User enters: setenv COLOR blue
+The parser produces: "args[0] = "setenv";" "args[1] = "COLOR";" "args[2] = "blue";" "args[3] = NULL;"
+Now args[2] == NULL is false , so the code creates a new string.
+
+#### 5.9.5. Checking whether the new variable was created :
+This is another allocation-failure check.
+If "new_var" is NULL, the function cannot complete the operation.
+It frees the strings copied into "new_env", then frees the pointer array, and returns the original environment.
+
+#### 5.9.6. Adding the new variable :
+" new_env[env_count] = new_var;
+new_env[env_count + 1] = NULL; "
+This is where the new environment array becomes complete.
