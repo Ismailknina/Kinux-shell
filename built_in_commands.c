@@ -234,4 +234,48 @@ char** command_setenv(char** args , char** env)
     new_env[env_count + 1] = NULL;
 
     return new_env;
+
+}
+
+char** command_unsetenv(char** args, char** env)
+{
+
+    if (!args[1])
+    {
+        printf("Usage : unsetenv <variable> \n");
+        return env;
+
+        int env_count = count_env_vars(env);
+
+        char** new_env = malloc(env_count * sizeof(char*));
+
+        if(!new_env)
+        {
+            perror("Failed to allocate memory for new environment");
+            return env; // Return the original environment if memory allocation fails
+        }
+
+        int j=0 , found = 0;
+
+        for (int i = 0 ; i < env_count ; i++)
+        {
+            if(strncmp(env[i],args[1],strlen(args[1])) == 0 && env[i][strlen(args[1])] == '=')
+            {
+                found = 1;
+                free(env[i]);
+            }
+            else new_env[j++] = env[i];
+        }
+
+        if(!found)
+        {
+            printf("Variable %s not found in environment \n" , args[1]);
+            free(new_env);
+            return env;
+        }
+
+        new_env[j] = NULL;
+
+        return new_env;
+    }
 }

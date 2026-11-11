@@ -508,3 +508,85 @@ It frees the strings copied into "new_env", then frees the pointer array, and re
 " new_env[env_count] = new_var;
 new_env[env_count + 1] = NULL; "
 This is where the new environment array becomes complete.
+
+
+### 5.10 command_unsetenv() :
+Now let's look at the opposite operation of the "command_setenv()".
+so "unsetenv" removes variables.
+
+Let's see the Function parameters :
+"char** command_unsetenv(char** args, char** env)"
+- "agrs" contains the command and its arguments .
+- "env" contains the environment array.
+- "char** " as the return type means the function can return a different environment array .
+
+The First step we did is (Checking whether the variable name was supplied) like in "command_setenv()" Then we count the environment variables and storing them is "env_count".
+
+The next step is to allocate a new environment array using
+"char** new_env = malloc(env_count * sizeof(char*));"
+If the one who is seeing that being in attention in "setenv()" we did "malloc(env_count + 2)" , So why Why "env_count" instead of "env_count + 2" ?
+>> Cuz I am planning to remove one variable. If I have 4 variables and remove one , I will have three variables plus one NULL termonator , So the allocation has enough room if exactly one entry is removed.
+
+If allocation fails:  return the original environment unchanged.
+
+#### 5.10.1. Understanding "j" and "found" :
+"int j = 0, found = 0;"
+These two variables have different responsibilities ,"j" tracks the position where I will place the next retained environment variable in the new array. "found" tracks whether the variable requested by the user has been found.
+
+Why do you need two indexes ?
+Because you have:
+- i: the position in the original environment.
+- j: the position in the new environment.
+They don't necessarily advance at the same rate because one entry may be removed.
+Example :
+LOOk at the Original array 
+===> "env[0] = HOME=/home/user
+      env[1] = PATH=/usr/bin:/bin
+      env[2] = COLOR=blue
+      env[3] = USER=user"
+Let's say You want to remove "COLOR" .
+The new array should become:
+===> "new_env[0] = HOME=/home/user
+      new_env[1] = PATH=/usr/bin:/bin
+      new_env[2] = USER=user"
+When the function reaches "COLOR" , it doesn't copy it, so "i" advances but "j" doesn't.
+
+#### 5.10.2. THE MAIN LOOP : "for (int i = 0; i < env_count; i++)"
+For each one, the code checks whether it matches the variable name the user wants to remove.
+
+#### 5.10.3. "strncmp(env[i],args[1],strlen(args[1])) == 0 " :
+This one compare the variable name
+"strlen(args[1])" returns the length of "COLOR" , So the comparison checks the first five characters of: "COLOR=blue" , against: "COLOR"
+They match.
+
+But why isn't this check enough ?
+Imagine the environment contains: "COLOR_EXTRA=red" , The first five characters are also "COLOR". So a prefix comparison alone could incorrectly match a different variable.
+
+#### 5.10.4. "env[i][strlen(args[1])] == '=' " :
+Second check: verify the equals sign
+The second condition ensures that the string begins with the exact variable name followed by '='.
+This prevents "unsetenv COLOR" from accidentally matching "COLOR_EXTRA=red" . This is a good example of why string-prefix comparisons sometimes need an additional boundary check.
+
+#### 5.10.5. when the variable is found :
+First "found =1;" records that the requested variable was found.
+
+Then "free(env[i]);" releases the memory occupied by the matching string.
+**Important memory warning**: this "free()" is only safe if "env[i]" points to dynamically allocated memory that your program owns.
+
+#### 5.10.6. when the variable isn't the one we're removing :
+"else new_env[j++] = env[i];"
+Here , It copies the pointer to the existing string into the new array.
+
+#### 5.10.7. if the variable wasn't found :
+If found is still zero, the requested variable wasn't present.
+Why free new_env ?
+Because I allocated the array at the beginning, but I won't use it.
+
+#### 5.10.8. Terminating the new array :
+Once all the original entries have been processed, I add the NULL pointer at the end. This is necessary because the environment array must remain NULL-terminated .
+example : 
+"new_env[0] = "HOME=/home/user";
+ new_env[1] = "PATH=/usr/bin:/bin";
+ new_env[2] = "USER=user";
+ new_env[3] = NULL;"
+Without the NULL terminator, functions traversing the environment wouldn't know where to stop.
