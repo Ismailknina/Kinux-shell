@@ -1,36 +1,51 @@
 #include "shell_config.h"
 
-int built_in_commands(char** args , char** env , char* initial_directory)
+void display_help()
 {
-    // To avoid unused parameter warning (for the version where You see this the commands using env are commented out).
-    (void) env; 
-    // To avoid unused parameter warning (for the version where You see this the commands using initial_directory are commented out).
-    (void) initial_directory;
+    printf("Available commands:\n");
+    printf("\tcd <directory>      - Change the current directory.\n");
+    printf("\tpwd                 - Print the current working directory.\n");
+    printf("\techo <text>         - Print the given text.\n");
+    printf("\tenv                 - Display all environment variables.\n");
+    printf("\tsetenv VAR=value    - Set an environment variable.\n");
+    printf("\tunsetenv <variable> - Remove an environment variable.\n");
+    printf("\twhich <command>     - Locate an executable in the system's PATH.\n");
+    printf("\t.help               - Display this help message.\n");
+    printf("\texit or quit        - Exit the shell.\n");
+}
 
-    // Check if the command is a built-in command and execute it accordingly.
+// Check if the command is a built-in command and execute it accordingly.
+int built_in_commands(char** args , char*** env , char* initial_directory)
+{
     if (strcmp(args[0], "cd") == 0)
     {
         return command_cd(args , initial_directory);
     } 
-    else if (strcmp(args[0], "help") == 0)
+    else if (strcmp(args[0], "pwd") == 0)
     {
-        // return command_help();
+        return command_pwd();
+    } 
+    else if (strcmp(args[0], "echo") == 0)
+    {
+        return command_echo(args , *env);
     } 
     else if (strcmp(args[0], "env") == 0)
     {
-        return command_env(env);
+        return command_env(*env);
     } 
     else if (strcmp(args[0], "setenv") == 0)
     {
-        return command_setenv(args , env);
+        *env = command_setenv(args , *env);
+        return 0;
     } 
-    else if (strcmp(args[0], "unsetenv") == 0)
+    else if (strcmp(args[0], ".help") == 0 || strcmp(args[0], "help") == 0)
     {
-        // return command_unsetenv(args , env);
+        display_help();
+        return 0;
     } 
     else if (strcmp(args[0], "which") == 0)
     {
-        return command_which(args , env);
+        return command_which(args , *env);
     } 
     else if (strcmp(args[0], "exit") == 0 || strcmp(args[0], "quit") == 0)
     {
@@ -38,12 +53,11 @@ int built_in_commands(char** args , char** env , char* initial_directory)
     } 
     else
     {
-        // Not a built-in command.
-        return 1; 
+        // Not a built-in command, execute it as an external command.
+        return executors(args , *env);
     }
-    
-    return 0;
 
+    return 0;
 }
 
 void run_shell(char** env){
@@ -54,6 +68,8 @@ void run_shell(char** env){
     char** args;
     
     char* initial_directory = getcwd(NULL,0);
+
+    printf("Type .help for a list of available commands.\n");
 
     while (1)
     {
@@ -68,15 +84,16 @@ void run_shell(char** env){
 
         args = split_commands(input);
         
-        if (args[0])
+        if (args && args[0])
         {
-            built_in_commands(args , env , initial_directory);
+            built_in_commands(args , &env , initial_directory);
         }
 
+        free_tokens(args); // Free the memory allocated for the command tokens.
     }
-    free_tokens(args); // Free the memory allocated for the command tokens.
 
-
+    free(input);
+    free(initial_directory);
 }
 
 
