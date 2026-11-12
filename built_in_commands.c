@@ -1,4 +1,4 @@
-# include "shell_config.h"
+#include "shell_config.h"
 
 int command_cd(char** args , char* initial_path)
 {
@@ -19,7 +19,7 @@ int command_pwd()
 
     cwd = getcwd(NULL,0);
 
-    if(cwd != NULL) {printf("%s \n",cwd); free(cwd);}
+    if(cwd != NULL) {printf("%s\n",cwd); free(cwd);}
 
     else perror("getcwd");
 
@@ -37,11 +37,24 @@ int command_echo(char** args , char** env)
         new_line = 0;
         i++;
     }
+
     for (; args[i] ; i++)
     {
         if(args[i][0] == '$')
         {
-            char* env_var = getenv(args[i]+1);
+            char* env_var = NULL;
+            size_t j = 0;
+
+            // Search for the environment variable in the shell's environment array
+            while(env[j] != NULL)
+            {
+                if(strncmp(env[j], args[i]+1, strlen(args[i]+1)) == 0 && env[j][strlen(args[i]+1)] == '=')
+                {
+                    env_var = env[j] + strlen(args[i]+1) + 1;
+                    break;
+                }
+                j++;
+            }
 
             if(env_var) printf("%s", env_var);
 
@@ -49,14 +62,16 @@ int command_echo(char** args , char** env)
         }
         else printf("%s", args[i]);
 
-        if(args[i+1] != NULL) 
+        if(args[i+1] != NULL)
         {
             new_line = 0;
             printf(" ");
         }
+
         if(new_line) printf("\n");
+
         new_line = 1;
-        
+
     }
     return 0;
 
@@ -66,7 +81,7 @@ int command_echo(char** args , char** env)
 int command_env(char** env)
 {
     size_t i = 0;
-    
+
     while(env[i] != NULL)
     {
         printf("%s\n" , env[i]);
@@ -104,13 +119,14 @@ int command_which(char** args , char** env)
     {
         printf("%s\n", full_path);
         free(full_path); // free the allocated memory for full_path because find_command_in_path likely allocates memory for the path string.
+        return 0;
     }
     else
     {
         printf("which: %s: command not found\n", args[1]);
         return 1; // to indicate that the operation failed or that the command was not found.
     }
-    
+
 }
 
 // Function to search for the command in PATH
@@ -119,7 +135,7 @@ char* find_command_in_path(const char* command, char** env)
     char* path_env = NULL; // Variable to hold the PATH environment variable
     char* path_copy = NULL; // Variable to hold a copy of the PATH variable for tokenization
     char* token = NULL; // Variable to hold each directory in the PATH during tokenization
-    char* full_path[1024]; // Array to hold the full path of the command
+    char full_path[1024]; // Array to hold the full path of the command
 
     // Searching for the PATH environment variable in the provided env array
     for (size_t i = 0; env[i]; i++)
@@ -134,7 +150,7 @@ char* find_command_in_path(const char* command, char** env)
     if (path_env == NULL) return NULL; // If PATH is not found, return NULL
 
     path_copy = strdup(path_env); // Create a copy of the PATH variable for tokenization
-    if(path_copy == NULL) 
+    if(path_copy == NULL)
     {
         perror("Failed to allocate memory for path_copy");
         return NULL; // Return NULL if memory allocation fails
@@ -144,9 +160,10 @@ char* find_command_in_path(const char* command, char** env)
     while (token != NULL)
     {
         size_t len = strlen(token); // Get the length of the current directory in PATH
+
         // Construct the full path to the command by appending the command name to the current directory
-        if(token[len - 1] == '/') snprintf(full_path, sizeof(full_path), "%s%s%s", token, "/" , command); 
-        else snprintf(full_path, sizeof(full_path), "%s%s", token , command);
+        if(token[len - 1] != '/') snprintf(full_path, sizeof(full_path), "%s/%s", token, command);
+        else snprintf(full_path, sizeof(full_path), "%s%s", token, command);
 
         // Check if the constructed path is executable using access() function
         if (access(full_path, X_OK) == 0)
@@ -168,7 +185,7 @@ int count_env_vars(char** env)
 {
     size_t count = 0;
     while(env[count] != NULL) count++; // Increment the count for each non-NULL environment variable
-    return count;
+    return (int)count;
 }
 
 
@@ -189,14 +206,14 @@ char** command_setenv(char** args , char** env)
         return env; // Return the original environment if memory allocation fails
     }
 
-    for (int i = 0; i < env_count; i++) 
+    for (int i = 0; i < env_count; i++)
     {
         new_env[i] = strdup(env[i]); // Copy existing environment variables to the new array
 
         if (!new_env[i])
         {
             perror("strdup");
-            for (int j = 0; i < i; j++)
+            for (int j = 0; j < i; j++)
             {
                 free(new_env[j]);
             }
@@ -206,18 +223,18 @@ char** command_setenv(char** args , char** env)
     }
 
     char* new_var = NULL;
-    if (args[2] ==  NULL)
+    if (args[2] == NULL)
     {
         new_var = strdup(args[1]);
     }
-    else {
+    else
+    {
         new_var = malloc(strlen(args[1]) + strlen(args[2]) + 2);
         if (new_var)
         {
             sprintf(new_var , "%s=%s" , args[1] , args[2]);
-        }    
+        }
     }
-    
 
     if(!new_var)
     {
@@ -244,38 +261,62 @@ char** command_unsetenv(char** args, char** env)
     {
         printf("Usage : unsetenv <variable> \n");
         return env;
-
-        int env_count = count_env_vars(env);
-
-        char** new_env = malloc(env_count * sizeof(char*));
-
-        if(!new_env)
-        {
-            perror("Failed to allocate memory for new environment");
-            return env; // Return the original environment if memory allocation fails
-        }
-
-        int j=0 , found = 0;
-
-        for (int i = 0 ; i < env_count ; i++)
-        {
-            if(strncmp(env[i],args[1],strlen(args[1])) == 0 && env[i][strlen(args[1])] == '=')
-            {
-                found = 1;
-                free(env[i]);
-            }
-            else new_env[j++] = env[i];
-        }
-
-        if(!found)
-        {
-            printf("Variable %s not found in environment \n" , args[1]);
-            free(new_env);
-            return env;
-        }
-
-        new_env[j] = NULL;
-
-        return new_env;
     }
+
+    int env_count = count_env_vars(env);
+
+    char** new_env = malloc((env_count + 1) * sizeof(char*));
+
+    if(!new_env)
+    {
+        perror("Failed to allocate memory for new environment");
+        return env; // Return the original environment if memory allocation fails
+    }
+
+    int j=0 , found = 0;
+
+    for (int i = 0 ; i < env_count ; i++)
+    {
+        if(strncmp(env[i],args[1],strlen(args[1])) == 0 &&
+           env[i][strlen(args[1])] == '=')
+        {
+            found = 1;
+        }
+        else
+        {
+            new_env[j] = strdup(env[i]);
+
+            if(!new_env[j])
+            {
+                perror("strdup");
+
+                for (int k = 0; k < j; k++)
+                {
+                    free(new_env[k]);
+                }
+
+                free(new_env);
+                return env;
+            }
+
+            j++;
+        }
+    }
+
+    if(!found)
+    {
+        printf("Variable %s not found in environment \n" , args[1]);
+
+        for (int i = 0; i < j; i++)
+        {
+            free(new_env[i]);
+        }
+
+        free(new_env);
+        return env;
+    }
+
+    new_env[j] = NULL;
+
+    return new_env;
 }
