@@ -7,6 +7,9 @@ char** split_commands(char* input){
         perror("Memory allocation failed");
         exit(EXIT_FAILURE);
     }
+
+    tokens[0] = NULL; // Initialize the token array safeely
+
     char* token = NULL;
     size_t position = 0; // index of the current token in the tokens array
     size_t token_length = 0;
@@ -22,19 +25,28 @@ char** split_commands(char* input){
         if (input[i] == '\0') break;
 
         token = &input[i];
-        
+
         while (input[i] != ' ' && input[i] != '\n' && input[i] != '\r' && input[i] != '\t' && input[i] != '\a' && input[i] != '\0')
         {
             i++;
             token_length++;
         }
 
+        // Check if the token array has enough space
+        if(position >= buffer_max - 1)
+        {
+            fprintf(stderr, "Too many command tokens\n");
+            free_tokens(tokens);
+            return NULL;
+        }
+
         tokens[position] = malloc((token_length +1)*sizeof(char));
-        
+
         if (!tokens[position]){
                 perror("Memory allocation failed");
                 free_tokens(tokens);
-                exit(EXIT_FAILURE);}
+                exit(EXIT_FAILURE);
+        }
 
         // Copy the characters into the allocated memory
         for(size_t j = 0; j<token_length;j++)
@@ -44,9 +56,13 @@ char** split_commands(char* input){
 
         tokens[position][token_length] = '\0'; // Null-terminate the string
         position++; // Move to the next token position
+        tokens[position] = NULL; // Keep the array NULL-terminated
         token_length = 0; // Reset token length for the next token
 
+        if(input[i] == '\0') break; // Stop after processing the last token
+
     }
+
     tokens[position] = NULL; // Null-terminate the array of tokens
     return tokens;
 }
@@ -60,5 +76,5 @@ void free_tokens(char** tokens){
         free(tokens[i]); // releases the memory of each individual string.
     }
 
-    free(tokens); //  releases the array containing the pointers.
+    free(tokens); // releases the array containing the pointers.
 }
