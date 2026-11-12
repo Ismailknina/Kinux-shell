@@ -1,9 +1,12 @@
-# include <shell_config.h>
+#include "shell_config.h"
 
 int executors(char** args , char** env)
 {
     pid_t pid ;
     int status ;
+
+    // Check if there is a valid command to execute
+    if (!args || !args[0]) return 0;
 
     pid = fork();
 
@@ -18,9 +21,10 @@ int executors(char** args , char** env)
     {
         if(child_process(args,env))
         {
-            perror("execve");
-            return 1;
+            _exit(EXIT_FAILURE); // Terminate the child process if execution fails.
         }
+
+        _exit(EXIT_SUCCESS);
     }
     else // Parent Process
     {
@@ -33,67 +37,118 @@ int executors(char** args , char** env)
         if (WIFSIGNALED(status)) // Was it terminated by a signal?
         {
             printf("Process terminated by signal: %d\n", WTERMSIG(status));// Which signal terminated it?
+            return 128 + WTERMSIG(status);
         }
-        
-    }
-    return 1;
 
+        if (WIFEXITED(status))
+        {
+            return WEXITSTATUS(status); // Return the exit status of the external command.
+        }
+    }
+
+    return 1;
 }
 
 int child_process(char** args , char** env)
 {
-    char* path_string = get_path(env); // Finding the env string beginning with "PATH="
-    int num_paths; // Number of directories extracted from PATH
-    char** path_list = split_paths(path_string,&num_paths); // will update this variable through its second parameter.
+    char* path_string = NULL;
+    int num_paths = 0; // Number of directories extracted from PATH
+    char** path_list = NULL;
+
+    // Check if the command already contains a path
+    if (strchr(args[0], '/') != NULL)
+    {
+        execve(args[0], args, env);
+        perror("execve");
+        return 1;
+    }
+
+    path_string = get_path(env); // Finding the env string beginning with "PATH="
+
+    if (path_string != NULL)
+    {
+        path_list = split_paths(path_string,&num_paths);
+    }
 
     // Loop through every PATH directory
     for (int i=0; i < num_paths; i++)
     {
         // Construct the full executable path
-        char full_path[MAX_INPUT_SIZE]; // Limit of charachters
-        snprintf(full_path, sizeof(full_path), "%s/%s", path_list[i], args[0]);
+        char full_path[MAX_INPUT_SIZE]; // Limit of characters
+        int path_length = snprintf(full_path, sizeof(full_path), "%s/%s", path_list[i], args[0]);
 
-        // check is the file is executable
+        if (path_length < 0 || path_length >= (int)sizeof(full_path))
+        {
+            continue; // Skip paths that are too long.
+        }
+
+        // Check if the file is executable
         if(access(full_path,X_OK)== 0)
         {
             // This tells the operating system to replace the child process's current program with full_path
-            execve(full_path,args,env); 
+            execve(full_path,args,env);
         }
     }
 
     // Freeing Memory
-    for(int i = 0 ; path_list[i] ; i++) free(path_list[i]);
-    free(path_string) ; 
+    for(int i = 0 ; i < num_paths ; i++)
+    {
+        free(path_list[i]);
+    }
+
     free(path_list);
-    
+    free(path_string);
+
     // Try executing the command in the current working directory
     char* cwd = NULL;
     cwd = getcwd(NULL, 0);
 
-    // 
-    if(cwd == NULL) { perror("getcwd"); return 1; }
+    if(cwd == NULL)
+    {
+        perror("getcwd");
+        return 1;
+    }
 
-    // 
+    // Construct the full path using the current working directory
     char full_cwd_path[MAX_INPUT_SIZE];
-    snprintf(full_cwd_path, sizeof(full_cwd_path), "%s/%s", cwd, args[0]);
+    int path_length = snprintf(full_cwd_path, sizeof(full_cwd_path), "%s/%s", cwd, args[0]);
+
+    if (path_length < 0 || path_length >= (int)sizeof(full_cwd_path))
+    {
+        fprintf(stderr, "Command path is too long\n");
+        free(cwd);
+        return 1;
+    }
+
+    // Try to execute the command
     execve(full_cwd_path, args, env);
 
-    // 
     perror("execve");
-    
+    free(cwd);
 
     return 1;
-
 }
 
-
-// 
-char* get_path(char** env) 
+// Fetches the PATH environment variable
+char* get_path(char** env)
 {
-    for (int i = 0; env[i]; i++) 
+    if (!env) return NULL;
+
+    for (int i = 0; env[i]; i++)
     {
-        if(strncmp(env[i], "PATH=", 5) == 0) return my_strdup(env[i] + 5);
+        if(strncmp(env[i], "PATH=", 5) == 0)
+        {
+            char* path_string = strdup(env[i] + 5);
+
+            if (!path_string)
+            {
+                perror("strdup");
+            }
+
+            return path_string;
+        }
     }
+
     return NULL;
 }
 
@@ -101,41 +156,72 @@ char* get_path(char** env)
 char** split_paths(char* paths, int* count)
 {
     char** result = NULL;
+    char** temp = NULL;
     char* token;
-    size_t size_of_path = my_strlen(paths);
-    char paths_copy[size_of_path];
+    char* paths_copy;
 
-    // 
-    strncpy(paths_copy, paths, sizeof(paths_copy));
-    paths_copy[sizeof(paths_copy) - 1] = '\0';
-
-    // 
-    token = my_strtok(paths_copy, ":");
     *count = 0;
 
-    // 
-    while (token) 
+    if (!paths) return NULL;
+
+    paths_copy = strdup(paths);
+
+    if (!paths_copy)
     {
-        // 
-        result = realloc(result, ((*count + 1) * sizeof(char*)));
-        if (!result) 
+        perror("strdup");
+        return NULL;
+    }
+
+    token = strtok(paths_copy, ":");
+
+    while (token)
+    {
+        // Allocate space for the new path and the final NULL pointer
+        temp = realloc(result, ((*count + 2) * sizeof(char*)));
+
+        if (!temp)
         {
             perror("realloc");
+
+            for (int i = 0; i < *count; i++)
+            {
+                free(result[i]);
+            }
+
+            free(result);
+            free(paths_copy);
+            *count = 0;
             return NULL;
         }
 
-        //
-        result[*count] = my_strdup(token);
-        if (!result[*count]) 
+        result = temp;
+
+        // Copy the current directory path
+        result[*count] = strdup(token);
+
+        if (!result[*count])
         {
-            perror("my_strdup");
+            perror("strdup");
+
+            for (int i = 0; i < *count; i++)
+            {
+                free(result[i]);
+            }
+
+            free(result);
+            free(paths_copy);
+            *count = 0;
             return NULL;
         }
-        
-        // 
+
         (*count)++;
-        token = my_strtok(NULL, ":");
+
+        result[*count] = NULL; // Keep the array NULL-terminated
+
+        token = strtok(NULL, ":");
     }
+
+    free(paths_copy);
 
     return result;
 }
