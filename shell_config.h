@@ -11,6 +11,12 @@
 # include <unistd.h> 
 // Provides [size_t (It is also available through stdlib.h and stdio.h)], [NULL]
 #include <stddef.h>  
+// 
+#include <sys/types.h>
+// 
+#if !defined(_WIN32) && !defined(_WIN64)
+#include <sys/wait.h>
+#endif
 
 // It tells the preprocessor to replace every occurrence of MAX_INPUT with 1024 before compilation. It isn't a variable and doesn't allocate memory.
 # define MAX_INPUT_SIZE 1024 

@@ -590,3 +590,147 @@ example :
  new_env[2] = "USER=user";
  new_env[3] = NULL;"
 Without the NULL terminator, functions traversing the environment wouldn't know where to stop.
+
+
+## 6.Understanding external_commands.c :
+This is the part of my shell that handles external commands such as: "ls" , "ls -l" , "gcc main.c -o main" , "./program" .
+Unlike built-in commands such as "cd", "pwd", and "echo", external commands are separate executable programs. My shell needs to create another process to run them.
+
+There are four important concepts I'll build up as we read the code:
+1."fork()" —> creates a child process.
+2."execve()" —> replaces the child process with the requested program.
+3."waitpid()" —> lets the parent wait for the child.
+4."PATH" —> tells the shell which directories to search for executable commands.
+**One important distinction**: "fork()" creates a process; "execve()" does not create another process. It replaces the program running inside the process that calls it.
+
+### 6.1. The "executor()" function :
+
+#### 6.1.1 Understanding the parameters :
+"int executor(char** args, char** env)"
+First parameter: "char** args"
+This is the array of command arguments produced by "split_commands()"
+Second parameter: "char** env"
+This is the environment-variable array, which you previously explored in "command_env()"
+The child process will receive this environment when "execve()" launches the external program.
+
+#### 6.1.2 The variables :
+"pid_t pid; int status;"
+
+- What is "pid_t"?
+  "pid_t" is a type defined by POSIX headers, commonly used to represent a process ID (PID). A process ID is a number assigned by the operating system to identify a running process.
+We use "pid_t" rather than assuming the process ID is always an ordinary int.
+
+- What is "status"?
+  "status" is an integer that "waitpid()" will fill with information about how the child process finished.
+
+#### 6.1.3 creating a child process :
+"pid = fork();"
+Here "fork()" asks the operating system to create a new process by duplicating the calling process .
+The key thing is that "fork()" returns different values depending on which process is executing. -1 for a process creation failed and 0 siad that we are executing in the child and a Positive number  for executing in the parent ; the number is the child's PID
+
+#### 6.1.4 child process :
+"pid == 0" means that we are now executing in the child process , The cild calls : "child_process(args, env)" This function is responsible for locating the executable and attempting to launch it.
+
+#### 6.1.5 The parent process waitpid() :
+[   else // Parent Process
+    {
+        if(waitpid(pid,&status,0) == -1) 
+        {
+            perror("waitpid");
+            return 1;
+        }
+
+        if (WIFSIGNALED(status))
+        {
+            printf("Process terminated by signal: %d\n", WTERMSIG(status));
+        }
+    } ]
+This branch runs in the parent our original shell process.
+
+- Why does the parent need "waitpid()" ?
+Because the shell generally needs to wait until the external command finishes before displaying the next prompt.
+For example : We type "ls" , The shell creates a child to run "ls".
+If the parent didn't wait, it could immediately display another prompt while "ls" was still running. 
+For a simple foreground shell, that would make the interaction confusing.
+
+- Understanding the arguments of "waitpid(pid, &status, 0)" 
+"waitpid()" is a POSIX function declared in <sys/wait.h>
+It takes 3 arguments :
+pid ==> The process ID of the child we want to wait for
+&status ==> Adress where the OS stores the child's termination info
+0 ==> Wait normally ; dont return until the child changes state
+"waitpid()" needs the address of status because it must write information into our variable.
+The third argument, '0', means the parent waits for the specified child to terminate. It doesn't use the non-blocking behavior provided by "WNOHANG".
+
+- So there is a question What does "waitpid()" return ?
+A positive value: the PID of the child whose status was collected.
+-1: an error occurred.
+It can be interrupted by a signal, in which case it may return -1 
+
+
+#### 6.1.6 WIFSIGNALED() and WTERMSIG() :
+The status value is "encoded". I should not interpret it directly as the child's exit code.
+These are macros provided by <sys/wait.h>.
+- "WIFSIGNALED(status)" checks whether the child terminated because it received a signal.
+- "WTERMSIG(status)" gives the number of the signal that caused the termination, when that condition is true.
+For example, if a process is terminated by "SIGSEGV", "WTERMSIG(status)" can report the signal number associated with "SIGSEGV".
+
+### 6.2. The "child_process()" function :
+The goal is to find the executable file corresponding to args[0].
+For example, when you enter: "ls -l" args[0] is "ls"
+But where is the ls executable stored ? It might be located in:'/usr/bin/ls' or '/bin/ls'
+SO The shell uses the PATH environment variable to search through directories that might contain the executable.
+
+So Retrieve the PATH variable :"char* path_string = get_path(env);"
+This calls the function at the bottom of the file I will write it later , Its purpose is to find the environment string beginning with "PATH=" and return a dynamically allocated copy of the value.
+
+After that let's See the number of directories extracted from "PATH" storing it in "int num_paths;"
+
+#### 6.2.1 char** path_list = split_paths(path_string, &num_paths); :
+The PATH parser splits a string using colons":"
+for example we have "/usr/local/bin:/usr/bin:/bin" so it will be like this : "path_list[0]=/usr/locl/bin" , "path_list[1]=/ur/bin" etc
+And we need "&num_paths" rather than: "num_paths" Because "split_paths()" needs to modify the original "num_paths" variable.
+
+#### 6.2.2 Construct the full executable path:
+"char full_path[MAX_INPUT];
+snprintf(full_path, sizeof(full_path), "%s/%s", path_list[i], args[0]);"
+
+Let's understand the formatting: "%s/%s"
+for example : path_list[i] = "/usr/bin"; args[0] = "ls";
+The resulting string is: "/usr/bin/ls"
+
+Why use "snprintf()" rather than "sprintf()" ?
+Because "snprintf()" receives the size of the destination buffer in this case is "sizeof(full_path)" , It limits how many characters are written, helping prevent writing beyond the array's boundaries.
+
+#### 6.2.3 Check whether the file is executable:
+[  if (access(full_path, X_OK) == 0) {
+    execve(full_path, args, env);
+}  ]
+This introduces two important system calls: "access(")" and "execve()".
+
+First "access()" :
+"access()" checks whether the calling process can access a file in a particular way. "X_OK" asks whether the file is executable.
+Its return values are :
+0 ==> the access check succeeded
+-1 ==> The check failed
+
+Second "execve()" :
+This is the function that actually launches the executable.
+Its declaration is essentially:
+"int execve(const char *pathname, char *const argv[], char *const envp[]);"
+It receives three arguments:
+    - pathname ==> Loction of the executable
+    - argv ==> command name and arguments
+    - env ==> Environment passed to the program
+For example: "execve("/usr/bin/ls", args, env);"
+This tells the operating system to replace the child process's current program with "/usr/bin/ls".
+Rember fork() creates the child process and execve replaces the program running in that child process .
+If execve fails it returns -1.
+
+#### 6.2.4 After PATH searching:
+The intention is to release the memory allocated for the PATH string and its directory list.
+
+#### 6.2.5 Try the current working directory:
+If the PATH search didn't successfully launch the command, the code tries the current working directory.
+
+#### 6.2.6 Construct a path in the current directory :
