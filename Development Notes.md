@@ -1,4 +1,4 @@
-# TECHNICAL DOCUMENTATION
+# Development Notes
 
 ## 1.Understanding main.c
 
