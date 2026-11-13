@@ -166,7 +166,7 @@ Kinux-shell/
 - **Build discipline.** Makefile variables and pattern rules, incremental builds, and compiling clean under `-Wall -Wextra -Werror`.
 - **POSIX vs ISO C.** Which functions come from where — and what porting actually breaks, which the missing `<sys/wait.h>` in MSYS2 taught me firsthand.
 
-The function-by-function version of all of this is in the [Technical Documentation](Technical%20Documentation.md).
+The function-by-function version of all of this is in the [Technical Documentation](https://github.com/Ismailknina/Kinux-shell/blob/main/TECHNICAL_DOCUMENTATION.md).
 
 ## Known Limitations
 
