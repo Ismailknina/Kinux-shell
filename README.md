@@ -137,7 +137,7 @@ The directory has been changed to /tmp
 [Kinux-Shell]>> exit
 ```
 
-![Kinux-Shell running in a terminal](assets/kinux-shell-usage.png) 
+![Kinux-Shell running in a terminal](assets/kinux-shell-usage.PNG) 
 
 ## Project Structure
 
