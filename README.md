@@ -24,7 +24,8 @@ Built-ins never fork, because they can't: `cd` changes the *shell's* working dir
 
 ## Demo
 Click the thumbnail below to watch the Kinux-Shell demonstration.
-[![Kinux-Shell demo video](assets/kinux-shell-demo-thumbnail.png)](https://youtu.be/J7p48XxZC5A)
+
+https://github.com/user-attachments/assets/64fcd054-8bed-458c-922d-803e63cffbf2
 
 ## Features
 
