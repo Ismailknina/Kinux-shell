@@ -192,7 +192,7 @@ Identified while building the project — candidates, not commitments:
 ## Documentation
 
 - **[Development Notes.md](Development%20Notes.md)** — my working notes from building the project: the questions I had, what didn't make sense at first, what clicked, and the decisions behind the implementation.
-- **[Technical Documentation.md](Technical%20Documentation.md)** — the structured technical explanation of the final implementation: architecture, each source file, memory management, command execution, and the systems-programming concepts behind them.
+- **[TECHNICAL_DOCUMENTATION.md](https://github.com/Ismailknina/Kinux-shell/blob/main/TECHNICAL_DOCUMENTATION.md)** — the structured technical explanation of the final implementation: architecture, each source file, memory management, command execution, and the systems-programming concepts behind them.
 
 ## Author
 
