@@ -23,9 +23,8 @@ A command goes through four steps:
 Built-ins never fork, because they can't: `cd` changes the *shell's* working directory, and a child process could only ever change its own.
 
 ## Demo
-
-[![Kinux-Shell demo video](assets/kinux-shell-demo-thumbnail.png)](VIDEO_LINK_HERE)
-<!-- TODO: upload the demo video, replace VIDEO_LINK_HERE with its URL, and add the thumbnail at assets/kinux-shell-demo-thumbnail.png -->
+Click the thumbnail below to watch the Kinux-Shell demonstration.
+[![Kinux-Shell demo video](assets/kinux-shell-demo-thumbnail.png)](https://youtu.be/J7p48XxZC5A)
 
 ## Features
 
